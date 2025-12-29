@@ -9,11 +9,11 @@ from langchain_classic.chains.retrieval import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-# Page Config
+# --- Page Config ---
 st.set_page_config(page_title="GlobalTech HR", page_icon="🏢")
 st.title("🏢 GlobalTech HR Assistant")
 
-# Key Check
+# --- Key Check ---
 if "GOOGLE_API_KEY" not in st.secrets:
     st.error("Please add GOOGLE_API_KEY to Streamlit Secrets.")
     st.stop()
@@ -26,17 +26,19 @@ def load_rag_system():
     # 1. Load PDF
     loader = PyPDFLoader("data.pdf")
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-    chunks = text_splitter.split_documents(loader.load())
+    documents = loader.load()
+    chunks = text_splitter.split_documents(documents)
     
-    # 2. Create Vector Brain
+    # 2. Create Vector Brain (Embeddings)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-   llm = ChatGoogleGenerativeAI(
-        model="gemini-3-flash", # 🚀 2025 State-of-the-art
+    # 3. Setup Gemini LLM (Updated for Dec 2025 stability)
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3-flash-preview", # 🚀 Latest 2025 Model
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
-        convert_system_message_to_human=True,
+        convert_system_message_to_human=True, # Prevents 400 Errors
         safety_settings={
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
@@ -45,40 +47,49 @@ def load_rag_system():
         }
     )
     
-    # 4. Prompt: Merging instructions into the Human role
+    # 4. Prompt: Merging instructions into a single turn for Gemini
     prompt = ChatPromptTemplate.from_messages([
-        ("human", "Instructions: You are an HR Assistant. Use the following context to answer the user's question accurately. If the answer isn't in the context, say you don't know.\n\nContext: {context}\n\nQuestion: {input}")
+        ("human", "Instructions: You are a professional HR Assistant. Use the provided context to answer the question. If the answer isn't in the context, say you don't know.\n\nContext: {context}\n\nQuestion: {input}")
     ])
     
     combine_docs_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(vectorstore.as_retriever(), combine_docs_chain)
 
-# Initializing
+# --- Initializing System ---
 rag_chain = load_rag_system()
 
 if rag_chain is None:
-    st.error("File 'data.pdf' not found in the repository!")
+    st.error("File 'data.pdf' not found in the repository! Please upload it to GitHub.")
     st.stop()
 
-# Chat UI
+# --- Chat Interface ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Display history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# User Input
 if prompt_text := st.chat_input("Ask about HR policies..."):
+    # Save and show user message
     st.session_state.messages.append({"role": "user", "content": prompt_text})
     with st.chat_message("user"):
         st.markdown(prompt_text)
 
+    # Assistant Response
     with st.chat_message("assistant"):
-        with st.spinner("Searching HR Handbook..."):
+        with st.spinner("Searching the HR Handbook..."):
             try:
+                # Running the RAG Chain
                 response = rag_chain.invoke({"input": prompt_text})
                 answer = response["answer"]
+                
                 st.markdown(answer)
                 st.session_state.messages.append({"role": "assistant", "content": answer})
             except Exception as e:
+                # Custom error message for easier debugging
                 st.error(f"Something went wrong: {str(e)}")
+                if "404" in str(e):
+                    st.warning("Tip: If you see a 404, check your Google AI Studio to see if 'gemini-3-flash-preview' is active for your region.")
