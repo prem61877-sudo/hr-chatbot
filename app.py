@@ -9,38 +9,35 @@ from langchain_classic.chains.retrieval import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-# 1. Page Configuration
-st.set_page_config(page_title="GlobalTech HR Bot", page_icon="🏢")
+# Page Config
+st.set_page_config(page_title="GlobalTech HR", page_icon="🏢")
 st.title("🏢 GlobalTech HR Assistant")
 
-# 2. Key Guard: Stop if key is missing
+# Key Check
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("❌ API Key not found in Streamlit Secrets!")
+    st.error("Please add GOOGLE_API_KEY to Streamlit Secrets.")
     st.stop()
-
-# Explicitly set environment variable as a backup
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 @st.cache_resource
 def load_rag_system():
     if not os.path.exists("data.pdf"):
         return None
         
-    # Load and Split
+    # 1. Load PDF
     loader = PyPDFLoader("data.pdf")
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = text_splitter.split_documents(loader.load())
     
-    # Brain (Embeddings)
+    # 2. Create Vector Brain
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-  # 🟢 FIXED: Use strings instead of Enums to satisfy Pydantic
+    # 3. Setup Gemini with 2025 Stability Fixes
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
-        convert_system_message_to_human=True,
+        convert_system_message_to_human=True, # Critical for 400 Error
         safety_settings={
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
@@ -49,19 +46,22 @@ def load_rag_system():
         }
     )
     
-    # Prompt & Chain
+    # 4. Prompt: Merging instructions into the Human role
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an HR Assistant. Use the context to answer: {context}"),
-        ("human", "{input}")
+        ("human", "Instructions: You are an HR Assistant. Use the following context to answer the user's question accurately. If the answer isn't in the context, say you don't know.\n\nContext: {context}\n\nQuestion: {input}")
     ])
     
     combine_docs_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(vectorstore.as_retriever(), combine_docs_chain)
 
-# Initialize
+# Initializing
 rag_chain = load_rag_system()
 
-# 3. Chat Logic
+if rag_chain is None:
+    st.error("File 'data.pdf' not found in the repository!")
+    st.stop()
+
+# Chat UI
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -69,13 +69,17 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt_text := st.chat_input("Ask about company policies..."):
+if prompt_text := st.chat_input("Ask about HR policies..."):
     st.session_state.messages.append({"role": "user", "content": prompt_text})
     with st.chat_message("user"):
         st.markdown(prompt_text)
 
     with st.chat_message("assistant"):
-        with st.spinner("Consulting the handbook..."):
-            response = rag_chain.invoke({"input": prompt_text})
-            st.markdown(response["answer"])
-            st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
+        with st.spinner("Searching HR Handbook..."):
+            try:
+                response = rag_chain.invoke({"input": prompt_text})
+                answer = response["answer"]
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+            except Exception as e:
+                st.error(f"Something went wrong: {str(e)}")
