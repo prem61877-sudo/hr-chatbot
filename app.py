@@ -36,7 +36,7 @@ def load_rag_system():
     # 3. Setup Gemini LLM (Updated for Dec 2025 stability)
     # Ensure this block is indented exactly 4 spaces inside the function
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3-flash", 
+        model="gemini-2.5-flash", 
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
         convert_system_message_to_human=True, 
