@@ -8,12 +8,8 @@ from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-st.set_page_config(page_title="GlobalTech HR Assistant", page_icon="🏢")
-
-# This adds the building icon and title to the sidebar
-st.sidebar.markdown("# 🏢 GlobalTech")
-st.sidebar.markdown("### HR Assistant")
-st.sidebar.divider()
+st.set_page_config(page_title="GlobalTech HR", page_icon="🏢")
+st.title("🏢 GlobalTech HR Assistant")
 
 @st.cache_resource
 def load_rag_system():
