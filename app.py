@@ -13,9 +13,9 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="GlobalTech HR", page_icon="🏢")
 st.title("🏢 GlobalTech HR Assistant")
 
-# --- Key Check ---
+# --- API Key Check ---
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Please add GOOGLE_API_KEY to Streamlit Secrets.")
+    st.error("Missing GOOGLE_API_KEY in Streamlit Secrets!")
     st.stop()
 
 @st.cache_resource
@@ -23,23 +23,21 @@ def load_rag_system():
     if not os.path.exists("data.pdf"):
         return None
         
-    # 1. Load PDF
+    # 1. Load and Chunk PDF
     loader = PyPDFLoader("data.pdf")
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-    documents = loader.load()
-    chunks = text_splitter.split_documents(documents)
+    chunks = text_splitter.split_documents(loader.load())
     
-    # 2. Create Vector Brain (Embeddings)
+    # 2. Embeddings & Vector Store
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-    # 3. Setup Gemini LLM (Updated for Dec 2025 stability)
-    # Ensure this block is indented exactly 4 spaces inside the function
+    # 3. Setup Gemini 3 (Stable Dec 2025 Model)
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
+        model="gemini-3-flash", # 👈 Current 2025 Stable Alias
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
-        convert_system_message_to_human=True, 
+        convert_system_message_to_human=True,
         safety_settings={
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
@@ -48,46 +46,41 @@ def load_rag_system():
         }
     )
     
-    # 4. Prompt: Merging instructions into a single turn for Gemini
+    # 4. Prompt Template
     prompt = ChatPromptTemplate.from_messages([
-        ("human", "Instructions: You are a professional HR Assistant. Use the provided context to answer the question. If the answer isn't in the context, say you don't know.\n\nContext: {context}\n\nQuestion: {input}")
+        ("human", "You are an HR Specialist. Using ONLY the provided context, answer the user's question. If the information is not in the context, say 'I cannot find that in the HR handbook.'\n\nContext: {context}\n\nQuestion: {input}")
     ])
     
     combine_docs_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(vectorstore.as_retriever(), combine_docs_chain)
 
-# --- Initializing System ---
+# --- Initializing ---
 rag_chain = load_rag_system()
 
 if rag_chain is None:
-    st.error("File 'data.pdf' not found in the repository! Please upload it to GitHub.")
+    st.error("Please upload 'data.pdf' to your GitHub repository.")
     st.stop()
 
 # --- Chat Interface ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# User Input
-if prompt_text := st.chat_input("Ask about HR policies..."):
-    # Save and show user message
-    st.session_state.messages.append({"role": "user", "content": prompt_text})
+if user_input := st.chat_input("Ask a question about HR..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(prompt_text)
+        st.markdown(user_input)
 
-    # Assistant Response
     with st.chat_message("assistant"):
-        with st.spinner("Searching the HR Handbook..."):
+        with st.spinner("Consulting HR data..."):
             try:
-                # Running the RAG Chain
-                response = rag_chain.invoke({"input": prompt_text})
+                response = rag_chain.invoke({"input": user_input})
                 answer = response["answer"]
-                
                 st.markdown(answer)
                 st.session_state.messages.append({"role": "assistant", "content": answer})
             except Exception as e:
-                st.error(f"Something went wrong: {str(e)}")
+                st.error(f"Error: {str(e)}")
+                st.info("Check if your Google Cloud project has Gemini 3 Flash enabled.")
