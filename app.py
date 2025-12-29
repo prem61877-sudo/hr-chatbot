@@ -10,6 +10,11 @@ from langchain_core.prompts import ChatPromptTemplate
 
 st.set_page_config(page_title="GlobalTech HR Assistant", page_icon="🏢")
 
+# This adds the building icon and title to the sidebar
+st.sidebar.markdown("# 🏢 GlobalTech")
+st.sidebar.markdown("### HR Assistant")
+st.sidebar.divider()
+
 @st.cache_resource
 def load_rag_system():
     loader = PyPDFLoader("data.pdf")
