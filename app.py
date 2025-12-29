@@ -1,3 +1,4 @@
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import streamlit as st
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -30,12 +31,15 @@ def load_rag_system():
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-# 🟢 FIXED: Explicitly passing the API key from Streamlit Secrets
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash", 
-        google_api_key=st.secrets["GOOGLE_API_KEY"], 
-        temperature=0
-    )
+  llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash", 
+    google_api_key=st.secrets["GOOGLE_API_KEY"], 
+    temperature=0,
+    convert_system_message_to_human=True,
+    safety_settings={
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    }
+)
     
     system_prompt = "You are an HR Assistant. Use the context to answer: {context}"
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
