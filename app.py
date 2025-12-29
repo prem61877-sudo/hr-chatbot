@@ -30,11 +30,12 @@ def load_rag_system():
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash", 
-    google_api_key=st.secrets["GOOGLE_API_KEY"], # Explicitly fetch secret
-    temperature=0
-)
+# 🟢 FIXED: Explicitly passing the API key from Streamlit Secrets
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash", 
+        google_api_key=st.secrets["GOOGLE_API_KEY"], 
+        temperature=0
+    )
     
     system_prompt = "You are an HR Assistant. Use the context to answer: {context}"
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
