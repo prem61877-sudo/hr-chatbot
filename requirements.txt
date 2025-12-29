@@ -1,8 +1,9 @@
-%%writefile requirements.txt
 streamlit
 langchain
 langchain-community
 langchain-google-genai
 langchain-huggingface
+langchain-core
 faiss-cpu
 pypdf
+sentence-transformers
