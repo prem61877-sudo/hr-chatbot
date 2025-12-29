@@ -34,11 +34,12 @@ def load_rag_system():
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
     # 3. Setup Gemini LLM (Updated for Dec 2025 stability)
+    # Ensure this block is indented exactly 4 spaces inside the function
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3-flash-preview", # 🚀 Latest 2025 Model
+        model="gemini-3-flash", 
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
-        convert_system_message_to_human=True, # Prevents 400 Errors
+        convert_system_message_to_human=True, 
         safety_settings={
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
@@ -89,7 +90,4 @@ if prompt_text := st.chat_input("Ask about HR policies..."):
                 st.markdown(answer)
                 st.session_state.messages.append({"role": "assistant", "content": answer})
             except Exception as e:
-                # Custom error message for easier debugging
                 st.error(f"Something went wrong: {str(e)}")
-                if "404" in str(e):
-                    st.warning("Tip: If you see a 404, check your Google AI Studio to see if 'gemini-3-flash-preview' is active for your region.")
