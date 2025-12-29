@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
@@ -36,14 +35,17 @@ def load_rag_system():
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-    # AI Model (Gemini)
+   # 🟢 FIXED: Using strings instead of Enums to satisfy Pydantic validation
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
-        api_key=st.secrets["GOOGLE_API_KEY"], # 2025 standard parameter
+        api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
         convert_system_message_to_human=True,
         safety_settings={
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+            "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+            "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+            "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
         }
     )
     
