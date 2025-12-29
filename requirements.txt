@@ -8,3 +8,4 @@ langchain-classic
 faiss-cpu
 pypdf
 sentence-transformers
+google-generativeai
