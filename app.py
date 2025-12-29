@@ -32,12 +32,11 @@ def load_rag_system():
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-    # 3. Setup Gemini with 2025 Stability Fixes
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+   llm = ChatGoogleGenerativeAI(
+        model="gemini-3-flash", # 🚀 2025 State-of-the-art
         api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0,
-        convert_system_message_to_human=True, # Critical for 400 Error
+        convert_system_message_to_human=True,
         safety_settings={
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
