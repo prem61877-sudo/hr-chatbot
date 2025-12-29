@@ -35,7 +35,7 @@ def load_rag_system():
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     
-   # 🟢 FIXED: Using strings instead of Enums to satisfy Pydantic validation
+  # 🟢 FIXED: Use strings instead of Enums to satisfy Pydantic
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         api_key=st.secrets["GOOGLE_API_KEY"],
