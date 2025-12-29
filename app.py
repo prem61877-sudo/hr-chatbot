@@ -1,86 +1,79 @@
 import streamlit as st
-import os
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_classic.chains.retrieval import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-# --- Page Config ---
-st.set_page_config(page_title="GlobalTech HR", page_icon="🏢")
-st.title("🏢 GlobalTech HR Assistant")
-
-# --- API Key Check ---
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Missing GOOGLE_API_KEY in Streamlit Secrets!")
-    st.stop()
+# 1. Page Configuration
+st.set_page_config(page_title="GlobalTech HR Assistant", page_icon="🏢")
+st.title("🏢 GlobalTech AI HR Assistant")
 
 @st.cache_resource
 def load_rag_system():
-    if not os.path.exists("data.pdf"):
-        return None
-        
-    # 1. Load and Chunk PDF
+    # Load PDF
     loader = PyPDFLoader("data.pdf")
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-    chunks = text_splitter.split_documents(loader.load())
+    docs = loader.load()
     
-    # 2. Embeddings & Vector Store
+    # Split Text
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    final_docs = text_splitter.split_documents(docs)
+    
+    # Embeddings & Vector Store
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore = FAISS.from_documents(final_docs, embeddings)
     
-   # 🟢 UPDATED: Dec 2025 Production-ready config
+    # LLM Config (Gemini 2.5 Flash - 2025 Stable Version)
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
-        api_key=st.secrets["GOOGLE_API_KEY"],
-        temperature=1.0, # Recommended for Gemini 3
-        convert_system_message_to_human=True, 
-        safety_settings={
-            "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
-            "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-            "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-            "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-        }
+        model="gemini-2.5-flash",
+        google_api_key=st.secrets["GOOGLE_API_KEY"],
+        temperature=0,
+        convert_system_message_to_human=True
     )
     
-    # 4. Prompt Template
-    prompt = ChatPromptTemplate.from_messages([
-        ("human", "You are an HR Specialist. Using ONLY the provided context, answer the user's question. If the information is not in the context, say 'I cannot find that in the HR handbook.'\n\nContext: {context}\n\nQuestion: {input}")
-    ])
-    
-    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
-    return create_retrieval_chain(vectorstore.as_retriever(), combine_docs_chain)
+    return vectorstore, llm
 
-# --- Initializing ---
-rag_chain = load_rag_system()
+vectorstore, llm = load_rag_system()
 
-if rag_chain is None:
-    st.error("Please upload 'data.pdf' to your GitHub repository.")
-    st.stop()
+# 2. Updated Prompt Template (Identity & Fallback)
+system_prompt = (
+    "You are the GlobalTech AI HR Assistant. Your purpose is to help employees "
+    "understand company policies and procedures based on the handbook.\n\n"
+    "IDENTITY RULE: If asked 'who are you' or 'tell me about yourself', "
+    "identify as the GlobalTech AI HR Assistant created to support staff.\n\n"
+    "KNOWLEDGE RULE: Use the context below to answer questions. If the information "
+    "is NOT in the context, strictly say: 'This is not written in handbook so you "
+    "can contact to the Hr manager for further details'\n\n"
+    "Context: {context}"
+)
 
-# --- Chat Interface ---
+prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    ("human", "{input}"),
+])
+
+# 3. Chain Setup
+question_answer_chain = create_stuff_documents_chain(llm, prompt)
+rag_chain = create_retrieval_chain(vectorstore.as_retriever(), question_answer_chain)
+
+# 4. Chat UI
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if user_input := st.chat_input("Ask a question about HR..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
+if query := st.chat_input("Ask me about HR policies..."):
+    st.session_state.messages.append({"role": "user", "content": query})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.markdown(query)
 
     with st.chat_message("assistant"):
-        with st.spinner("Consulting HR data..."):
-            try:
-                response = rag_chain.invoke({"input": user_input})
-                answer = response["answer"]
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-                st.info("Check if your Google Cloud project has Gemini 3 Flash enabled.")
+        response = rag_chain.invoke({"input": query})
+        answer = response["answer"]
+        st.markdown(answer)
+        st.session_state.messages.append({"role": "assistant", "content": answer})
